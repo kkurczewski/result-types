@@ -5,7 +5,7 @@ import java.util.Optional;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class Result<E extends Exception, T> {
+public class Result<E extends Exception, T> implements OptionalResult<E, T>, MandatoryResult<E, T> {
 
     private final E exception;
     private final T value;
@@ -36,14 +36,17 @@ public class Result<E extends Exception, T> {
         }
     }
 
+    @Override
     public <U> Result<E, U> map(Function<T, U> mapper) {
         return (value != null) ? Result.success(mapper.apply(value)) : Result.failure(exception);
     }
 
+    @Override
     public <U> Result<E, U> flatMap(Function<T, Result<E, U>> mapper) {
         return (value != null) ? mapper.apply(value) : Result.failure(exception);
     }
 
+    @Override
     public Result<E, T> peek(Consumer<T> consumer) {
         if (value != null) {
             consumer.accept(value);
@@ -51,6 +54,7 @@ public class Result<E extends Exception, T> {
         return this;
     }
 
+    @Override
     public T unwrap() throws E {
         if (exception != null) {
             throw exception;
@@ -63,6 +67,7 @@ public class Result<E extends Exception, T> {
         }
     }
 
+    @Override
     public Optional<T> unwrapOpt() throws E {
         if (exception != null) {
             throw exception;
