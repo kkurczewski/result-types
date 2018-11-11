@@ -1,6 +1,6 @@
-# Result type
+# Result types
 
-Lightweight either-like type for Java
+Result types allows lazy propagation of checked-exception in Java.
 
 ## Use case
 
@@ -8,24 +8,27 @@ It is intended in cases where:
 * low-level exception need to be bubbled up to high-level endpoint of application
 * type is expected to have one of three states: Present | Absent | Error
 * original exception may not be dropped (unlike Java Optional API)
-* user should be forced to handle exception (unlike RuntimeException)
+* user should be aware of exception (unlike RuntimeException)
 * solution must be simple (unlike bloated Functional Libs)
 
-# Example
+# Pseudo-code
 
 ```java
-// low-level call
-Result<SQLException, List<String>> result = Result.of(() -> db.getUser("bob"));
 
-// ... some processing
-result.map(...)
+Optional<User> getUser(String name) throws CheckedException;
+
+OptionalResult<CheckedException, User> result = OptionalResult.of(() -> db.getUser());
+
+result
+    .map(User::getMovies)
+    .map(Movie::getTitle)
     .flatMap(...)
     .peek(...)
+    // ... more processing
 
 try {
-    Payment payment = result.unwrap();
-} catch (SQLException e) {
-    // handle error on top tier
+    Optional<Recommendations> recommendations = result.unwrapOpt();
+} catch(CheckedException e) {
+    // ... handle error on top tier
 }
-    
 ```
