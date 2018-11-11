@@ -1,52 +1,48 @@
 package pl.kurczews.result;
 
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.Objects;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
-public class Result<E extends Exception, T> implements OptionalResult<E, T>, MandatoryResult<E, T> {
+public class Result<E extends Exception, T> {
 
     private final E exception;
     private final T value;
 
-    private Result(E exception, T value) {
-        this.exception = exception;
-        this.value = value;
+    private Result(E exception) {
+        this.exception = Objects.requireNonNull(exception);
+        this.value = null;
+    }
+
+    private Result(T value) {
+        this.value = Objects.requireNonNull(value);
+        this.exception = null;
     }
 
     public static <E extends Exception, T> Result<E, T> success(T value) {
-        return new Result<>(null, value);
+        return new Result<>(value);
     }
 
     public static <E extends Exception, T> Result<E, T> failure(E exception) {
-        return new Result<>(exception, null);
+        return new Result<>(exception);
     }
 
-    public static <E extends Exception, T> Result<E, T> empty() {
-        return new Result<>(null, null);
-    }
-
-    @SuppressWarnings("unchecked")
     public static <E extends Exception, T> Result<E, T> of(CheckedSupplier<E, T> supplier) {
         try {
             return Result.success(supplier.get());
         } catch (Exception ex) {
-            return Result.failure((E) ex);
+            return Result.failure(castException(ex));
         }
     }
 
-    @Override
     public <U> Result<E, U> map(Function<T, U> mapper) {
         return (value != null) ? Result.success(mapper.apply(value)) : Result.failure(exception);
     }
 
-    @Override
     public <U> Result<E, U> flatMap(Function<T, Result<E, U>> mapper) {
         return (value != null) ? mapper.apply(value) : Result.failure(exception);
     }
 
-    @Override
     public Result<E, T> peek(Consumer<T> consumer) {
         if (value != null) {
             consumer.accept(value);
@@ -54,25 +50,30 @@ public class Result<E extends Exception, T> implements OptionalResult<E, T>, Man
         return this;
     }
 
-    @Override
     public T unwrap() throws E {
         if (exception != null) {
             throw exception;
         }
+        return value;
+    }
 
-        if (value != null) {
-            return value;
-        } else {
-            throw new NoSuchElementException();
-        }
+    @SuppressWarnings("unchecked")
+    private static <E extends Exception> E castException(Exception ex) {
+        if (ex instanceof RuntimeException) throw (RuntimeException) ex;
+        return (E) ex;
     }
 
     @Override
-    public Optional<T> unwrapOpt() throws E {
-        if (exception != null) {
-            throw exception;
-        }
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        Result<?, ?> result = (Result<?, ?>) o;
+        return Objects.equals(exception, result.exception) &&
+                Objects.equals(value, result.value);
+    }
 
-        return (value != null) ? Optional.of(value) : Optional.empty();
+    @Override
+    public int hashCode() {
+        return Objects.hash(exception, value);
     }
 }

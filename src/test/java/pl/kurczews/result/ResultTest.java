@@ -3,122 +3,97 @@ package pl.kurczews.result;
 import org.junit.Test;
 
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
 import java.util.function.Consumer;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.catchThrowable;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotEquals;
 import static org.mockito.Mockito.*;
 
 public class ResultTest {
 
-    @Test
-    public void should_map_wrapped_value() throws IOException {
-        int value = successfulResult()
-                .map(String::length)
-                .unwrap();
+    private final IOException cause = new IOException();
+    private final Result<IOException, String> failedResult = Result.failure(cause);
+    private final Result<IOException, String> successfulResult = Result.success("success");
 
-        assertEquals(7, value);
+    @Test
+    public void unwrap_should_return_value_when_result_succeed() throws IOException {
+        assertEquals("success", successfulResult.unwrap());
     }
 
     @Test
-    public void should_flat_map_wrapped_value() throws IOException {
-
-        int value = successfulResult()
-                .flatMap(v -> Result.success(v.length()))
-                .unwrap();
-
-        assertEquals(7, value);
+    public void unwrap_should_throw_defined_exception_when_result_failed() {
+        assertEquals(cause, catchThrowable(failedResult::unwrap));
     }
 
     @Test
-    @SuppressWarnings("unchecked")
-    public void should_peek_wrapped_value() {
-        Consumer<String> consumer = mock(Consumer.class);
+    public void map_should_return_mapped_result_when_result_succeed() {
+        assertEquals(Result.success(7), successfulResult.map(String::length));
+    }
 
-        Result<IOException, String> result = spy(successfulResult());
+    @Test
+    public void map_should_preserve_original_exception_when_result_failed() {
+        assertEquals(Result.failure(cause), failedResult.map(String::length));
+    }
 
-        assertEquals(result, result.peek(consumer));
+    @Test
+    public void flat_map_should_return_mapped_result_when_result_succeed() {
+        assertEquals(Result.success(7), successfulResult.flatMap(v -> Result.success(v.length())));
+    }
+
+    @Test
+    public void flat_map_should_preserve_original_exception_when_result_failed() {
+        assertEquals(Result.failure(cause), failedResult.flatMap(v -> Result.success(v.length())));
+    }
+
+    @Test
+    public void peek_should_run_consumer_function_when_result_succeed() {
+        Consumer<String> consumer = getConsumerMock();
+
+        assertEquals(successfulResult, successfulResult.peek(consumer));
         verify(consumer).accept("success");
     }
 
     @Test
-    public void should_unwrap_as_optional() throws IOException {
-        Optional<String> value = successfulResult().unwrapOpt();
+    public void peek_should_ignore_consumer_function_when_result_failed() {
+        Consumer<String> consumer = getConsumerMock();
 
-        assertEquals(Optional.of("success"), value);
+        assertEquals(failedResult, failedResult.peek(consumer));
+        verifyZeroInteractions(consumer);
     }
 
     @Test
-    public void when_empty_result_unwrapped_as_optional_return_empty_optional() throws IOException {
-        Optional<String> value = emptyResult().unwrapOpt();
-
-        assertEquals(Optional.empty(), value);
+    public void result_of_succeed_operation_should_return_succeed_result() {
+        assertEquals(Result.success("success"), Result.of(() -> "success"));
     }
 
     @Test
-    public void when_empty_result_unwrapped_throw_no_such_element() {
-        assertThatThrownBy(emptyResult()::unwrap).isInstanceOf(NoSuchElementException.class);
+    public void result_of_failed_operation_should_return_failed_result() {
+        assertEquals(Result.failure(cause), Result.of(() -> { throw cause; }));
     }
 
     @Test
-    public void when_failed_result_unwrapped_throw_defined_exception() {
-        assertThatThrownBy(failedResult()::unwrap).isInstanceOf(IOException.class);
+    public void result_of_runtime_exception_operation_should_throw_original_exception() {
+        IllegalArgumentException runtimeException = new IllegalArgumentException();
+        assertEquals(runtimeException, catchThrowable(() -> Result.of(() -> { throw runtimeException; })));
     }
 
     @Test
-    public void when_failed_result_unwrapped_as_optional_throw_defined_exception() {
-        assertThatThrownBy(failedResult()::unwrapOpt).isInstanceOf(IOException.class);
+    public void equals_hash_code() {
+        Result<Exception, String> same = Result.success("same");
+        Result<Exception, String> alsoSame = Result.success("same");
+        Result<Exception, String> notSame = Result.success("not-same");
+
+        assertEquals(same, alsoSame);
+        assertEquals(same.hashCode(), alsoSame.hashCode());
+
+        assertNotEquals(notSame, same);
+        assertNotEquals(notSame, null);
+        assertNotEquals(notSame.hashCode(), same.hashCode());
     }
 
-    @Test
-    public void should_return_successful_result() throws IOException {
-        List<String> result = Result
-                .of(() -> readFile("./src/test/resources/ResultTest.txt"))
-                .unwrap();
-
-        assertThat(result).contains("passed");
-    }
-
-    @Test
-    public void should_return_failed_result() {
-        Result<IOException, List<String>> result = Result.of(() -> readFile("not-exists"));
-
-        assertThatThrownBy(result::unwrap).isInstanceOf(IOException.class);
-    }
-
-    @Test
-    public void should_forward_runtime_exception_when_unwrapped() {
-        String message = "some-runtime-exception";
-
-        Result<RuntimeException, Object> result = Result.of(() -> {
-            throw new IllegalArgumentException(message);
-        });
-
-        assertThatThrownBy(result::unwrap)
-                .isInstanceOf(IllegalArgumentException.class)
-                .hasMessage(message)
-                .hasNoCause();
-    }
-
-    private Result<IOException, String> successfulResult() {
-        return Result.success("success");
-    }
-
-    private Result<IOException, String> failedResult() {
-        return Result.failure(new IOException("failure"));
-    }
-
-    private Result<IOException, String> emptyResult() {
-        return Result.empty();
-    }
-
-    private List<String> readFile(String path) throws IOException {
-        return Files.readAllLines(Paths.get(path));
+    @SuppressWarnings("unchecked")
+    private Consumer<String> getConsumerMock() {
+        return mock(Consumer.class);
     }
 }
